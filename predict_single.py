@@ -116,7 +116,7 @@ def create_and_fill_np_array(start_or_end_logits, dataset, max_len):
     return logits_concat
 
 
-def predict(input):
+def predict(question, context, id):
     args = parse_args()
     accelerator = Accelerator()
 
@@ -195,10 +195,10 @@ def predict(input):
         return EvalPrediction(predictions=formatted_predictions, label_ids=[])
 
     examples = {
-        "question": [input["question"]],
-        "context": [input["context"]],
-        "id": [input["id"]],
-        "answers": ["..." for _ in input["id"]]}
+        "question": [question],
+        "context": [context],
+        "id": [id],
+        "answers": ["..."]}
     predict_data = prepare_validation_features(examples)
 
     predict_examples = Dataset.from_dict(examples)
@@ -236,13 +236,13 @@ def predict(input):
     outputs_numpy = (start_logits_concat, end_logits_concat)
     prediction = post_processing_function(predict_examples, predict_dataset, outputs_numpy)
 
-    return prediction
+    return prediction.predictions[0]['prediction_text']
 
 
 if __name__ == "__main__":
-    result = predict({
-        "id": "1",
-        "question": "Where is the milk?",
-        "context": "Mary put down the milk. The milk is here",
-    })
+    result = predict(
+        question="What is my name?",
+        context="My name is John",
+        id=1
+    )
     print(result)
