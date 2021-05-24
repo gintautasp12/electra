@@ -320,7 +320,6 @@ def main():
     # Preprocessing is slighlty different for training and evaluation.
 
     column_names = raw_datasets["train"].column_names
-    column_names = ['answers', 'context', 'id', 'question', 'title'] if len(column_names) != 5 else column_names
 
     question_column_name = "question" if "question" in column_names else column_names[0]
     context_column_name = "context" if "context" in column_names else column_names[1]
@@ -489,25 +488,6 @@ def main():
         # During Feature creation dataset samples might increase, we will select required samples again
         eval_dataset = eval_dataset.select(range(args.max_eval_samples))
 
-    if args.do_predict:
-        # if "test" not in raw_datasets:
-        #     raise ValueError("--do_predict requires a test dataset")
-        predict_examples = raw_datasets["validation"]
-        if args.max_predict_samples is not None:
-            # We will select sample from whole data
-            predict_examples = predict_examples.select(range(args.max_predict_samples))
-        # Predict Feature Creation
-        predict_dataset = predict_examples.map(
-            prepare_validation_features,
-            batched=True,
-            num_proc=args.preprocessing_num_workers,
-            remove_columns=column_names,
-            load_from_cache_file=not args.overwrite_cache,
-        )
-        if args.max_predict_samples is not None:
-            # During Feature creation dataset samples might increase, we will select required samples again
-            predict_dataset = predict_dataset.select(range(args.max_predict_samples))
-
     # Log a few random samples from the training set:
     for index in random.sample(range(len(train_dataset)), 3):
         logger.info(f"Sample {index} of the training set: {train_dataset[index]}.")
@@ -531,12 +511,6 @@ def main():
     eval_dataloader = DataLoader(
         eval_dataset_for_model, collate_fn=data_collator, batch_size=args.per_device_eval_batch_size
     )
-
-    if args.do_predict:
-        predict_dataset_for_model = predict_dataset.remove_columns(["example_id", "offset_mapping"])
-        predict_dataloader = DataLoader(
-            predict_dataset_for_model, collate_fn=data_collator, batch_size=args.per_device_eval_batch_size
-        )
 
     # Post-processing:
     def post_processing_function(examples, features, predictions, stage="eval"):
@@ -697,37 +671,6 @@ def main():
     prediction = post_processing_function(eval_examples, eval_dataset, outputs_numpy)
     eval_metric = metric.compute(predictions=prediction.predictions, references=prediction.label_ids)
     logger.info(f"Evaluation metrics: {eval_metric}")
-
-    # Prediction
-    if args.do_predict:
-        all_start_logits = []
-        all_end_logits = []
-        for step, batch in tqdm(enumerate(predict_dataloader)):
-            with torch.no_grad():
-                outputs = model(**batch)
-                start_logits = outputs.start_logits
-                end_logits = outputs.end_logits
-
-                if not args.pad_to_max_length:  # necessary to pad predictions and labels for being gathered
-                    start_logits = accelerator.pad_across_processes(start_logits, dim=1, pad_index=-100)
-                    end_logits = accelerator.pad_across_processes(start_logits, dim=1, pad_index=-100)
-
-                all_start_logits.append(accelerator.gather(start_logits).cpu().numpy())
-                all_end_logits.append(accelerator.gather(end_logits).cpu().numpy())
-
-        max_len = max([x.shape[1] for x in all_start_logits])  # Get the max_length of the tensor
-        # concatenate the numpy array
-        start_logits_concat = create_and_fill_np_array(all_start_logits, predict_dataset, max_len)
-        end_logits_concat = create_and_fill_np_array(all_end_logits, predict_dataset, max_len)
-
-        # delete the list of numpy arrays
-        del all_start_logits
-        del all_end_logits
-
-        outputs_numpy = (start_logits_concat, end_logits_concat)
-        prediction = post_processing_function(predict_examples, predict_dataset, outputs_numpy)
-        predict_metric = metric.compute(predictions=prediction.predictions, references=prediction.label_ids)
-        logger.info(f"Predict metrics: {predict_metric}")
 
     if args.output_dir is not None:
         accelerator.wait_for_everyone()
