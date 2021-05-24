@@ -116,7 +116,7 @@ def create_and_fill_np_array(start_or_end_logits, dataset, max_len):
     return logits_concat
 
 
-def predict(question, context, id):
+def predict(question, context, id, model=None):
     args = parse_args()
     accelerator = Accelerator()
 
@@ -126,7 +126,7 @@ def predict(question, context, id):
     config = AutoConfig.from_pretrained('google/electra-small-discriminator')
     tokenizer = ElectraTokenizerFast.from_pretrained('google/electra-small-discriminator')
     model = ElectraForQuestionAnswering.from_pretrained(
-        args.model_name_or_path,
+        args.model_name_or_path if model is None else model,
         from_tf=False,
         config=config,
     )
@@ -214,11 +214,9 @@ def predict(question, context, id):
     with torch.no_grad():
         outputs = model(**predict_data)
         start_logits = outputs.start_logits
-        end_logits = outputs.end_logits
 
-        if not args.pad_to_max_length:  # necessary to pad predictions and labels for being gathered
-            start_logits = accelerator.pad_across_processes(start_logits, dim=1, pad_index=-100)
-            end_logits = accelerator.pad_across_processes(start_logits, dim=1, pad_index=-100)
+        start_logits = accelerator.pad_across_processes(start_logits, dim=1, pad_index=-100)
+        end_logits = accelerator.pad_across_processes(start_logits, dim=1, pad_index=-100)
 
         all_start_logits = [accelerator.gather(start_logits).cpu().numpy()]
         all_end_logits = [accelerator.gather(end_logits).cpu().numpy()]
