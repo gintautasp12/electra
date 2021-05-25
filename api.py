@@ -1,3 +1,8 @@
+"""
+Gintautas Plonis 1812957
+Electra | SQuAD 2.0
+(Optional) REST API
+"""
 import json
 
 import flask as flask
@@ -20,7 +25,7 @@ def post():
     if content is None or 'question' not in content or 'context' not in content or 'id' not in content:
         return json.dumps({'message': 'Payload unsupported.'}), 400, {'ContentType': 'application/json'}
 
-    answer = predict(question=content['question'], context=content['context'], id=content['id'], model='model')
+    answer = predict(question=content['question'], context=content['context'], id=content['id'], model='model_8')
 
     return json.dumps({'answer': answer}), 200, {'ContentType': 'application/json'}
 

@@ -3,3 +3,4 @@ venv
 trained_models
 **/__pycache__
 predictions
+tensorboard*/

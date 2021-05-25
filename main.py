@@ -1,3 +1,8 @@
+"""
+Gintautas Plonis 1812957
+Electra | SQuAD 2.0
+(Optional) REST API
+"""
 import argparse
 import logging
 import math
@@ -9,6 +14,7 @@ import numpy as np
 import torch
 from datasets import load_dataset, load_metric
 from torch.utils.data.dataloader import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm
 
 import transformers
@@ -218,6 +224,12 @@ def parse_args():
         default=None,
         help="Model type to use if training from scratch.",
         choices=MODEL_TYPES,
+    )
+    parser.add_argument(
+        "--log_dir",
+        type=str,
+        default="tensorboard",
+        help="Directory for Tensorboard logs.",
     )
 
     args = parser.parse_args()
@@ -624,12 +636,20 @@ def main():
     progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
     completed_steps = 0
 
+    writer = SummaryWriter(args.log_dir)
+
+    num_iter_per_epoch = len(train_dataloader)
     for epoch in range(args.num_train_epochs):
         model.train()
-        for step, batch in enumerate(train_dataloader):
+        epoch_loss = []
+
+        data_progress_bar = tqdm(train_dataloader)
+        for step, batch in enumerate(data_progress_bar):
             outputs = model(**batch)
             loss = outputs.loss
             loss = loss / args.gradient_accumulation_steps
+            epoch_loss.append(float(loss))
+            total_loss = np.mean(epoch_loss)
             accelerator.backward(loss)
             if step % args.gradient_accumulation_steps == 0 or step == len(train_dataloader) - 1:
                 optimizer.step()
@@ -640,6 +660,14 @@ def main():
 
             if completed_steps >= args.max_train_steps:
                 break
+
+            writer.add_scalar('Train/Total_loss', loss, epoch * num_iter_per_epoch + step)
+            data_progress_bar.set_description(f"Epoch: {epoch + 1}/{args.num_train_epochs} | "
+                                              f"Iteration: {step + 1}/{num_iter_per_epoch} | "
+                                              f"Total loss: {total_loss:.5f}")
+
+    writer.flush()
+    writer.close()
 
     # Validation
     all_start_logits = []

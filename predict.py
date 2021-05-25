@@ -1,3 +1,8 @@
+"""
+Gintautas Plonis 1812957
+Electra | SQuAD 2.0
+(Optional) REST API
+"""
 import argparse
 import logging
 
