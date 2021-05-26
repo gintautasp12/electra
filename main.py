@@ -666,6 +666,12 @@ def main():
                                               f"Iteration: {step + 1}/{num_iter_per_epoch} | "
                                               f"Total loss: {total_loss:.5f}")
 
+        # Save model after each epoch
+        if args.output_dir is not None:
+            accelerator.wait_for_everyone()
+            unwrapped_model = accelerator.unwrap_model(model)
+            unwrapped_model.save_pretrained(args.output_dir, save_function=accelerator.save)
+
     writer.flush()
     writer.close()
 
